@@ -10,8 +10,8 @@ CXXFLAGS += -I./external/Common -I./external/Common/UtilNPP
 CXXFLAGS += -I./external/FreeImage
 CXXFLAGS += -I./src
 
-LDFLAGS = -lcudart -lnppc -lnppial -lnppicc -lnppidei -lnppif -lnppig -lnppim -lnppist -lnppisu -lnppitc
-LDFLAGS += -lnppisu_static -lnppif_static -lnppc_static -lculibos -lfreeimage
+LDFLAGS = -lcudart -lnppc -lnppial -lnppig -lnppisu
+LDFLAGS += -lfreeimage
 
 # Define directories
 SRC_DIR = src
