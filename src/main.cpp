@@ -229,11 +229,12 @@ int main(int argc, char *argv[])
         resizeImage(npp_image_host_transp, width, height, npp_image_device_transp);
 
         npp::ImageCPU_8u_C4 npp_image_host(npp_image_device_transp.size());
-        if (export_steps)
+        if (export_steps) {
             npp_image_device_transp.copyTo(npp_image_host.data(), npp_image_host.pitch());
             saveImage<npp::ImageCPU_8u_C4>(
                 "step1_resize_" + std::to_string(i) + ".png",
                 output_path, npp_image_host);
+        }
 
         // combine to the latest image
         npp::ImageNPP_8u_C4 npp_image_device_comb(npp_image_device_transp.size());
@@ -251,7 +252,7 @@ int main(int argc, char *argv[])
                 );
 
             bool is_last = (i == number_images - 1);
-            if (export_steps || is_last ) {
+            if ( export_steps || is_last ) {
                 npp_image_device_comb.copyTo(
                     npp_image_host.data(), npp_image_host.pitch()
                     );
