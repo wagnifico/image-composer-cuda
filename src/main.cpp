@@ -138,6 +138,9 @@ getArguments(int argc, char *argv[])
     if (checkCmdLineFlag(argc, (const char **)argv, "output")) {
         getCmdLineArgumentString(argc, (const char **)argv, "output", &buffer);
         output_path = buffer;
+        // make sure it is a folder
+        // TODO: add check if it exists
+        output_path += "/";
     }
     if (checkCmdLineFlag(argc, (const char **)argv, "steps"))
     {
@@ -205,16 +208,20 @@ int main(int argc, char *argv[])
     const size_t number_images = static_cast<size_t>(images.size());
 
     std::cout << " number of images: " << (int)number_images << std::endl;
+    std::cout << std::endl << "Start..." << std::endl;
 
-    NppiSize oSizeROI = {width, height};
+    const NppiSize size_ROI = {width, height};
+
+    npp::ImageNPP_8u_C4 last_image(width, height);
+    size_t i = 0;
 
     // this loop could be eventually replaced by a CUDA kernel, but you would 
     // not have the control of the order of the combinations and could not use
     // NPP functions (host code only)
-    npp::ImageNPP_8u_C4 last_image;
-    size_t i = 0;
     for (auto file : images)
     {
+        std::cout << file << std::endl;
+
         npp::ImageCPU_8u_C4 npp_image_host_transp;
         loadImage(file, alpha, npp_image_host_transp);
 
@@ -222,36 +229,48 @@ int main(int argc, char *argv[])
         resizeImage(npp_image_host_transp, width, height, npp_image_device_transp);
 
         npp::ImageCPU_8u_C4 npp_image_host(npp_image_device_transp.size());
-        npp_image_device_transp.copyTo(npp_image_host.data(), npp_image_host.pitch());
         if (export_steps)
+            npp_image_device_transp.copyTo(npp_image_host.data(), npp_image_host.pitch());
             saveImage<npp::ImageCPU_8u_C4>(
                 "step1_resize_" + std::to_string(i) + ".png",
                 output_path, npp_image_host);
 
         // combine to the latest image
         npp::ImageNPP_8u_C4 npp_image_device_comb(npp_image_device_transp.size());
-        if (i > 0) {
+        if ( i == 0 ) {
+            // get first loaded image
+            npp_image_device_transp.swap(last_image);
+        } else {
             NPP_CHECK_NPP(
                 nppiAlphaComp_8u_AC4R(
                     npp_image_device_transp.data(), npp_image_device_transp.pitch(),
                     last_image.data(), last_image.pitch(),
                     npp_image_device_comb.data(), npp_image_device_comb.pitch(),
-                    oSizeROI, ALPHA_BLENDING_OPERATION
+                    size_ROI, ALPHA_BLENDING_OPERATION
                     )
                 );
 
-            if (export_steps || i == number_images - 1)
-                npp_image_device_comb.copyTo(npp_image_host.data(), npp_image_host.pitch());
-            std::string out_file_name = (i < number_images - 1) ?
-                "step2_combined_" + std::to_string(i) : "step3_final";
-            out_file_name += ".png";
-            saveImage<npp::ImageCPU_8u_C4>(out_file_name, output_path, npp_image_host);
+            bool is_last = (i == number_images - 1);
+            if (export_steps || is_last ) {
+                npp_image_device_comb.copyTo(
+                    npp_image_host.data(), npp_image_host.pitch()
+                    );
+                std::string out_file_name = is_last ?
+                    "step3_final": "step2_combined_" + std::to_string(i);
+                out_file_name += ".png";
+                std::cout << "  exporting: " << out_file_name << std::endl;
+                saveImage<npp::ImageCPU_8u_C4>(
+                    out_file_name, output_path, npp_image_host);
+            }
+            // swap device images and free output of filter
+            npp_image_device_comb.swap(last_image);
         }
-        last_image = npp_image_device_comb;
-        i++;
 
         cudaFree(&npp_image_device_transp);
+        cudaFree(&npp_image_device_comb);
+        i++;
     }
+    std::cout << "End." << std::endl << std::endl;
 
     cudaFree(&last_image);
 
