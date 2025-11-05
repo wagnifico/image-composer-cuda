@@ -1,6 +1,6 @@
 
 
-// Resize 3-channel PNG for all images in folder
+// Loads all PNGs in folder, convert them to RGBA, resize and combine them.
 
 #include <cstring>
 #include <iostream>
@@ -36,69 +36,69 @@ void loadImage(
     const std::string file_path, const double alpha,
     npp::ImageCPU_8u_C4 &npp_image_host)
 {
-    FIBITMAP *p_bitmap_start = FreeImage_Load(FIF_PNG, file_path.c_str(), PNG_DEFAULT);
-    if (!p_bitmap_start)
+    FIBITMAP *p_bitmap_in = FreeImage_Load(FIF_PNG, file_path.c_str(), PNG_DEFAULT);
+    if (!p_bitmap_in)
         std::cerr << "Failed to load image!" << std::endl;
     
     // forcing it to be 32 bits
-    FIBITMAP *p_bitmap = FreeImage_ConvertTo32Bits(p_bitmap_start);
+    FIBITMAP *p_bitmap = FreeImage_ConvertTo32Bits(p_bitmap_in);
     setAlpha(p_bitmap, alpha);
 
     // Convert the FreeImage bitmap to an NPP image
     npp::ImageCPU_8u_C4 npp_image;
     convertFreeImageToNppImage<npp::ImageCPU_8u_C4>(p_bitmap, npp_image);
 
-    FreeImage_Unload(p_bitmap_start);
+    FreeImage_Unload(p_bitmap_in);
     FreeImage_Unload(p_bitmap);
 
     npp_image_host.swap(npp_image);
 }
 
-
 /// @brief Resize an image.
-/// @param npp_image_host Image to resize in CPU, reference to an NPP ImageCPU_8u_C4 object.
+/// @param npp_image_host Image to resize in CPU (NPP ImageCPU_8u_C4 object).
 /// @param width Target width.
 /// @param height Target height.
-/// @param nppImageDevice Resized image in GPU, reference to an NPP ImageNPP_8u_C4 object (in/out).
+/// @param npp_image_device Resized image in GPU (NPP ImageNPP_8u_C4 object, in/out).
 /// @details Uses CUBIC interpolation.
 void resizeImage(
     npp::ImageCPU_8u_C4 &npp_image_host,
     const uint width, const uint height,
-    npp::ImageNPP_8u_C4 &nppImageDevice)
+    npp::ImageNPP_8u_C4 &npp_image_device)
 {
 
-    const int widthSrc = npp_image_host.width();
-    const int heightSrc = npp_image_host.height();
-    NppiSize inSize = {widthSrc, heightSrc};
-    NppiRect inROI = {0, 0, widthSrc, heightSrc};
-    NppiPoint inOffset = {0, 0};
+    const int width_src = npp_image_host.width();
+    const int height_src = npp_image_host.height();
+    const NppiSize size_in = {width_src, height_src};
+    const NppiRect ROI_in = {0, 0, width_src, height_src};
+    const NppiPoint offset_in = {0, 0};
 
     // allocate device image of appropriately size
-    const double nXFactor = static_cast<double>(width) / widthSrc;
-    const double nYFactor = static_cast<double>(height) / heightSrc;
-    const double nXShift = 0.0;
-    const double nYShift = 0.0;
+    const double factor_x = static_cast<double>(width) / width_src;
+    const double factor_y = static_cast<double>(height) / height_src;
+    const double shift_nx = 0.0;
+    const double shift_ny = 0.0;
 
-    NppiRect dstRect;
+    NppiRect rect_dst;
     nppiGetResizeRect(
-        inROI, &dstRect, nXFactor, nYFactor, nXShift, nYShift,
-        INTERPOLATION_MODE
-        );
-    npp::ImageNPP_8u_C4 nppImageDeviceIn(npp_image_host);
-    npp::ImageNPP_8u_C4 nppImageDeviceResized(dstRect.width, dstRect.height);
+        ROI_in, &rect_dst, factor_x, factor_y, shift_nx, shift_ny,
+        INTERPOLATION_MODE);
+
+    npp::ImageNPP_8u_C4 npp_image_device_src(npp_image_host);
+    npp::ImageNPP_8u_C4 npp_image_device_dst(width, height);
     // run resize filter
     NPP_CHECK_NPP(
         nppiResizeSqrPixel_8u_C4R(
-            nppImageDeviceIn.data(), inSize, nppImageDeviceIn.pitch(), inROI,
-            nppImageDeviceResized.data(), nppImageDeviceResized.pitch(), dstRect,
-            nXFactor, nYFactor, nXShift, nYShift,
-            INTERPOLATION_MODE));
+            npp_image_device_src.data(), size_in, npp_image_device_src.pitch(), ROI_in,
+            npp_image_device_dst.data(), npp_image_device_dst.pitch(), rect_dst,
+            factor_x, factor_y, shift_nx, shift_ny,
+            INTERPOLATION_MODE)
+            );
 
-    cudaFree(&nppImageDeviceIn);
+    cudaFree(&npp_image_device_src);
 
     // swap the user given image with our result image, effecively
     // moving our newly loaded image data into the user provided shell
-    nppImageDevice.swap(nppImageDeviceResized);
+    npp_image_device.swap(npp_image_device_dst);
 }
 
 
@@ -108,8 +108,8 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
 {
 
     // default values
-    std::string inputPath = "./data/flags";
-    std::string outputPath = "./results/";
+    std::string input_path = "./data/flags";
+    std::string output_path = "./results/";
     // using the most common flag ratio
     const double ratio = 2.0 / 3.0;
     int width = 1000;
@@ -119,7 +119,7 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
     char *buffer;
     if (checkCmdLineFlag(argc, (const char **)argv, "input")) {
         getCmdLineArgumentString(argc, (const char **)argv, "input", &buffer);
-        inputPath = buffer;
+        input_path = buffer;
     }
     if (checkCmdLineFlag(argc, (const char **)argv, "width")) {
         getCmdLineArgumentString(argc, (const char **)argv, "width", &buffer);
@@ -136,31 +136,30 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
     }
     if (checkCmdLineFlag(argc, (const char **)argv, "output")) {
         getCmdLineArgumentString(argc, (const char **)argv, "output", &buffer);
-        outputPath = buffer;
+        output_path = buffer;
     }
 
     std::cout << std::endl;
-    std::cout << " input folder: " << inputPath << std::endl;
+    std::cout << " input folder: " << input_path << std::endl;
     std::cout << " width: " << width << std::endl;
     std::cout << " height: " << height << std::endl;
     std::cout << " alpha: " << alpha << std::endl;
-    std::cout << " output folder: " << outputPath << std::endl;
+    std::cout << " output folder: " << output_path << std::endl;
     std::cout << std::endl;
 
-    return std::make_tuple(inputPath, width, height, alpha, outputPath);
+    return std::make_tuple(input_path, width, height, alpha, output_path);
 }
 
-
 /// @brief Get list of png files in folder.
-/// @param Path to folder.
+/// @param input_path Path to folder.
 /// @return Vector with paths to png files in folder.
-std::vector<std::string> getFiles(const std::string inputPath)
+std::vector<std::string> getFiles(const std::string input_path)
 {
     std::vector<std::string> images;
-    DIR *dir = opendir(inputPath.c_str());
+    DIR *dir = opendir(input_path.c_str());
     if (dir == nullptr)
     {
-        std::cerr << "Error: Could not open directory " << inputPath << std::endl;
+        std::cerr << "Error: Could not open directory " << input_path << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -175,7 +174,7 @@ std::vector<std::string> getFiles(const std::string inputPath)
             std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower);
             // only include .png files
             if (ext == "png") {
-                images.push_back(inputPath + "/" + name);
+                images.push_back(input_path + "/" + name);
             }
         }
     }
@@ -210,38 +209,37 @@ int main(int argc, char *argv[])
     for (auto file : images)
     {
 
-        npp::ImageCPU_8u_C4 nppImageHoStTransparent;
-        loadImage(file, alpha, nppImageHoStTransparent);
+        npp::ImageCPU_8u_C4 npp_image_host_transp;
+        loadImage(file, alpha, npp_image_host_transp);
 
-        npp::ImageNPP_8u_C4 nppImageDeviceTransparent;
-        resizeImage(nppImageHoStTransparent, width, height, nppImageDeviceTransparent);
+        npp::ImageNPP_8u_C4 npp_image_device_transp;
+        resizeImage(npp_image_host_transp, width, height, npp_image_device_transp);
 
-
-        npp::ImageCPU_8u_C4 npp_image_host(nppImageDeviceTransparent.size());
-        nppImageDeviceTransparent.copyTo(npp_image_host.data(), npp_image_host.pitch());
+        npp::ImageCPU_8u_C4 npp_image_host(npp_image_device_transp.size());
+        npp_image_device_transp.copyTo(npp_image_host.data(), npp_image_host.pitch());
         saveImage<npp::ImageCPU_8u_C4>(file, output_path, npp_image_host);
 
-        // add to the latest image
-        npp::ImageNPP_8u_C4 nppImageDeviceCombined(nppImageDeviceTransparent.size());
+        // combine to the latest image
+        npp::ImageNPP_8u_C4 npp_image_device_comb(npp_image_device_transp.size());
         if (i > 0) {
             NPP_CHECK_NPP(
                 nppiAlphaComp_8u_AC4R(
-                    nppImageDeviceTransparent.data(), nppImageDeviceTransparent.pitch(),
+                    npp_image_device_transp.data(), npp_image_device_transp.pitch(),
                     last_image.data(), last_image.pitch(),
-                    nppImageDeviceCombined.data(), nppImageDeviceCombined.pitch(),
+                    npp_image_device_comb.data(), npp_image_device_comb.pitch(),
                     oSizeROI, ALPHA_BLENDING_OPERATION
                     )
                 );
             // put image on host
-            nppImageDeviceCombined.copyTo(npp_image_host.data(), npp_image_host.pitch());
+            npp_image_device_comb.copyTo(npp_image_host.data(), npp_image_host.pitch());
             saveImage<npp::ImageCPU_8u_C4>(
                 "" + std::to_string(i) + ".png", output_path, npp_image_host);
         }
 
-        last_image = nppImageDeviceCombined;
+        last_image = npp_image_device_comb;
         i++;
 
-        cudaFree(&nppImageDeviceTransparent);
+        cudaFree(&npp_image_device_transp);
     }
 
     return EXIT_SUCCESS;
