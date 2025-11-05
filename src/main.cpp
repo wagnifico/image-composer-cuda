@@ -108,8 +108,8 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
 {
 
     // default values
-    std::string inputPath = "./data/country-flags-png1000px";
-    std::string outputPath = "data/_tmp_/";
+    std::string inputPath = "./data/flags";
+    std::string outputPath = "./results/";
     // using the most common flag ratio
     const double ratio = 2.0 / 3.0;
     int width = 1000;
