@@ -6,8 +6,8 @@
 NVCC = nvcc
 
 CXXFLAGS = -std=c++11
-CXXFLAGS += -I./external/cuda-samples/Common -I./external/cuda-samples/Common/UtilNPP
-CXXFLAGS += -I./external/FreeImage/Source
+CXXFLAGS += -I./external/Common -I./external/Common/UtilNPP
+CXXFLAGS += -I./external/FreeImage
 CXXFLAGS += -I./src
 
 LDFLAGS = -lcudart -lnppc -lnppial -lnppicc -lnppidei -lnppif -lnppig -lnppim -lnppist -lnppisu -lnppitc
@@ -28,11 +28,13 @@ all: $(TARGET)
 
 # Get external code if not available
 getCode:
-	@if [ -d "external/cuda-samples" ]; then \
-		echo "Found cuda-samples"; \
+	@if [ -d "external/Common" ]; then \
+		echo "Found Common from cuda-samples"; \
 	else \
 		cd external; \
 		git clone https://github.com/NVIDIA/cuda-samples; \
+		mv cuda-samples/Common .; \
+		rm -rf cuda-samples; \
 		cd ..; \
 	fi
 	@if [ -d "external/FreeImage" ]; then \
@@ -42,6 +44,8 @@ getCode:
 		wget http://downloads.sourceforge.net/freeimage/FreeImage3180.zip; \
 		unzip FreeImage3180.zip; \
 		rm FreeImage3180.zip; \
+		mv FreeImage/Source FreeImage; \
+		rm -rf FreeImage; \
 		cd ..; \
 	fi
 
@@ -60,10 +64,8 @@ getData:
 
 get: getCode getData
 
-build: getCode $(TARGET)
 
-# Rule for building the target executable
-# Build object files
+# Rules for building the target executable
 $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BIN_DIR)
 	$(NVCC) $(CXXFLAGS) -c $< -o $@
 
@@ -71,10 +73,12 @@ $(TARGET): $(OBJS)
 	mkdir -p $(BIN_DIR)
 	$(NVCC) $(OBJS) -o $@ $(LDFLAGS)
 
-# Rule for running the application
-run: $(TARGET) getData
+build: getCode $(TARGET)
+
+# Rule for running the application - 2 examples
+run: build getData
 	./$(TARGET) --input "./data/colors" --width 105 --height 20
-	./$(TARGET) --width 1000 --alpha 0.1
+	#./$(TARGET) --width 1000 --alpha 0.1
 
 # Clean up
 clean:
