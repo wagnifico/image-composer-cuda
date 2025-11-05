@@ -77,7 +77,7 @@ build: getCode $(TARGET)
 
 # Rule for running the application - 2 examples
 run: build getData
-	./$(TARGET) --input "./data/colors" --width 105 --height 20
+	./$(TARGET) --input "./data/colors" --width 100 --height 100 --steps
 	#./$(TARGET) --width 1000 --alpha 0.1
 
 # Clean up

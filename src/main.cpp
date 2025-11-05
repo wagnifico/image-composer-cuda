@@ -104,17 +104,18 @@ void resizeImage(
 
 
 /// @brief Set the arguments based on call.
-std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char *argv[])
+std::tuple<std::string, uint, uint, double, bool, std::string>
+getArguments(int argc, char *argv[])
 {
 
     // default values
     std::string input_path = "./data/flags";
     std::string output_path = "./results/";
-    // using the most common flag ratio
-    const double ratio = 2.0 / 3.0;
+    const double ratio = 2.0 / 3.0; // most common flag ratio
     int width = 1000;
     int height = ratio * width;
     double alpha = 0.1;
+    bool export_steps = false;
 
     char *buffer;
     if (checkCmdLineFlag(argc, (const char **)argv, "input")) {
@@ -138,6 +139,10 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
         getCmdLineArgumentString(argc, (const char **)argv, "output", &buffer);
         output_path = buffer;
     }
+    if (checkCmdLineFlag(argc, (const char **)argv, "steps"))
+    {
+        export_steps = true;
+    }
 
     std::cout << std::endl;
     std::cout << " input folder: " << input_path << std::endl;
@@ -147,7 +152,8 @@ std::tuple<std::string,uint,uint,double,std::string> getArguments(int argc, char
     std::cout << " output folder: " << output_path << std::endl;
     std::cout << std::endl;
 
-    return std::make_tuple(input_path, width, height, alpha, output_path);
+    return std::make_tuple(
+        input_path, width, height, alpha, export_steps, output_path);
 }
 
 /// @brief Get list of png files in folder.
@@ -192,10 +198,11 @@ int main(int argc, char *argv[])
     std::string input_path, output_path;
     int width, height;
     double alpha;
+    bool export_steps;
 
-    std::tie(input_path, width, height, alpha, output_path) = getArguments(argc, argv);
+    std::tie(input_path, width, height, alpha, export_steps, output_path) = getArguments(argc, argv);
     auto images = getFiles(input_path);
-    const Npp8u number_images = static_cast<Npp8u>(images.size());
+    const size_t number_images = static_cast<size_t>(images.size());
 
     std::cout << " number of images: " << (int)number_images << std::endl;
 
@@ -208,7 +215,6 @@ int main(int argc, char *argv[])
     size_t i = 0;
     for (auto file : images)
     {
-
         npp::ImageCPU_8u_C4 npp_image_host_transp;
         loadImage(file, alpha, npp_image_host_transp);
 
@@ -217,7 +223,10 @@ int main(int argc, char *argv[])
 
         npp::ImageCPU_8u_C4 npp_image_host(npp_image_device_transp.size());
         npp_image_device_transp.copyTo(npp_image_host.data(), npp_image_host.pitch());
-        saveImage<npp::ImageCPU_8u_C4>(file, output_path, npp_image_host);
+        if (export_steps)
+            saveImage<npp::ImageCPU_8u_C4>(
+                "step1_resize_" + std::to_string(i) + ".png",
+                output_path, npp_image_host);
 
         // combine to the latest image
         npp::ImageNPP_8u_C4 npp_image_device_comb(npp_image_device_transp.size());
@@ -230,17 +239,21 @@ int main(int argc, char *argv[])
                     oSizeROI, ALPHA_BLENDING_OPERATION
                     )
                 );
-            // put image on host
-            npp_image_device_comb.copyTo(npp_image_host.data(), npp_image_host.pitch());
-            saveImage<npp::ImageCPU_8u_C4>(
-                "" + std::to_string(i) + ".png", output_path, npp_image_host);
-        }
 
+            if (export_steps || i == number_images - 1)
+                npp_image_device_comb.copyTo(npp_image_host.data(), npp_image_host.pitch());
+            std::string out_file_name = (i < number_images - 1) ?
+                "step2_combined_" + std::to_string(i) : "step3_final";
+            out_file_name += ".png";
+            saveImage<npp::ImageCPU_8u_C4>(out_file_name, output_path, npp_image_host);
+        }
         last_image = npp_image_device_comb;
         i++;
 
         cudaFree(&npp_image_device_transp);
     }
+
+    cudaFree(&last_image);
 
     return EXIT_SUCCESS;
 }
