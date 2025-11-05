@@ -1,5 +1,5 @@
 # ignore all subfolders by default
 */
-!country-flags-png1000px/
+!flags/
 !colors/
 !.gitignore
