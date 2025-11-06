@@ -1,5 +1,4 @@
-# ignore everything but itself
-*
+# ignore everything but some results
 */
 !.gitignore
 !sub-set-flags/

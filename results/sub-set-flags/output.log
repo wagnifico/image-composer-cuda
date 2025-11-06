@@ -1,0 +1,17 @@
+
+ input folder: data/sub-set-flags/
+ width: 400
+ height: 300
+ alpha: 0.5
+ output folder: results/sub-set-flags//
+
+ number of images: 3
+
+Start...
+data/sub-set-flags//0_gb-wls.png
+data/sub-set-flags//1_br.png
+  exporting: step2_combined_1.png
+data/sub-set-flags//2_ch.png
+  exporting: step3_final.png
+End.
+
