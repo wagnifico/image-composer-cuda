@@ -25,6 +25,7 @@ It is based on [FreeImage](https://freeimage.sourceforge.io/) and [NPP](https://
 Run `make build` to compile the code.
 
 Dependencies: FreeImage, CUDA, NPP
+
 Tested with CUDA 11.3 with C++11.
 
 Header files can be obtained by running `make getCode` or `make get` (also getting the data if not found),
