@@ -1,5 +1,6 @@
 # ignore all subfolders by default
 */
-!flags/
-!colors/
 !.gitignore
+!flags/
+!sub-set-flags/
+!colors/
