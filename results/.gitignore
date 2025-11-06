@@ -1,4 +1,7 @@
 # ignore everything but some results
+*
 */
 !.gitignore
 !sub-set-flags/
+!sub-set-flags/*
+!composed_all_flags.png

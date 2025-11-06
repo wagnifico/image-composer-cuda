@@ -12,7 +12,7 @@ It is based on [FreeImage](https://freeimage.sourceforge.io/) and [NPP](https://
 ## Repository architecture
 
 - `bin`: folder for storing the build, empty.
-- `data`: sample data. Sub-folder `flads` contains country flags from Hampus Joakim Borgos
+- `data`: sample data. Sub-folder `flags` contains country flags from Hampus Joakim Borgos
   repo [country-flags](https://github.com/hampusborgos/country-flags.git).
 - `external`: folder for storing the external code (FreeImage, cuda-samples), empty.
 - `results`: folder for storing the results, contains a sample and the combination of all flags.
@@ -48,7 +48,7 @@ Arguments (value in parenthesis is the default value):
 The used interpolation and blending operation are hard-coded in `main.cpp` as
 `NPPI_INTER_CUBIC` and `NPPI_OP_ALPHA_OVER`. Change the code and re-build it to test other algorithms.
 
-### Example
+### Examples
 
 The flags of Wales, Brazil and Switzerland (in this order), stored in `data/sub-set-flags` are combined with:
 
@@ -113,3 +113,7 @@ The steps of the procedure are illustrated next:
     </tr>
   </table>
 
+
+When considering all the 255 flags (alpha = 0.15):
+
+<img src="results/composed_all_flags.png" alt="All flags combined.">
